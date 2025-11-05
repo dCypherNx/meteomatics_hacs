@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
-from datetime import datetime, timezone
 from typing import Any
 
 import aiohttp
@@ -15,12 +14,14 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.util import dt as dt_util
 
 from .const import (
     API_BASE_URL,
     CONF_LATITUDE,
     CONF_LONGITUDE,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_MODEL,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     MAX_UPDATE_INTERVAL,
@@ -43,14 +44,22 @@ DATA_SCHEMA = vol.Schema(
 async def validate_input(hass: HomeAssistant, data: Mapping[str, Any]) -> None:
     """Validate user input by performing a simple API request."""
     session = async_get_clientsession(hass)
-    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-    timerange = f"{now:%Y-%m-%dT%H:%M:%SZ}--{now:%Y-%m-%dT%H:%M:%SZ}:PT1H"
+    time_zone_name = hass.config.time_zone
+    time_zone = (
+        dt_util.get_time_zone(time_zone_name)
+        if time_zone_name
+        else dt_util.UTC
+    )
+    now = dt_util.utcnow().astimezone(time_zone)
+    now = now.replace(minute=0, second=0, microsecond=0)
+    timerange = f"{now.isoformat(timespec='seconds')}--{now.isoformat(timespec='seconds')}:PT1H"
     parameters = "t_2m:C"
     url = f"{API_BASE_URL}/{timerange}/{parameters}/{data[CONF_LATITUDE]},{data[CONF_LONGITUDE]}/json"
 
     async with session.get(
         url,
         auth=aiohttp.BasicAuth(data[CONF_USERNAME], data[CONF_PASSWORD]),
+        params={"model": DEFAULT_MODEL},
         timeout=30,
     ) as response:
         response.raise_for_status()

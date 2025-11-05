@@ -12,6 +12,7 @@ CONF_LONGITUDE = "longitude"
 CONF_UPDATE_INTERVAL = "update_interval"
 
 API_BASE_URL = "https://api.meteomatics.com"
+DEFAULT_MODEL = "mix"
 
 HOURLY_HOURS = 24
 DAILY_DAYS = 7
