@@ -40,10 +40,12 @@ async def async_setup_entry(
     async_add_entities([MeteomaticsWeather(coordinator, entry, name)])
 
 
-class MeteomaticsWeather(CoordinatorEntity[MeteomaticsDataUpdateCoordinator], WeatherEntity):
+class MeteomaticsWeather(
+    CoordinatorEntity[MeteomaticsDataUpdateCoordinator], WeatherEntity
+):
     """Representation of a Meteomatics weather entity."""
 
-    _attr_has_entity_name = True
+    _attr_has_entity_name = False
 
     def __init__(
         self,
