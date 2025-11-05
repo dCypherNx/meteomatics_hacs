@@ -77,5 +77,31 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload Meteomatics config entry when options change."""
-    await async_unload_entry(hass, entry)
-    await async_setup_entry(hass, entry)
+    coordinator: MeteomaticsDataUpdateCoordinator | None = hass.data[DOMAIN].get(
+        entry.entry_id
+    )
+
+    if coordinator is None:
+        LOGGER.debug(
+            "Options updated for Meteomatics entry %s before setup completed; "
+            "the new update interval will be applied on the next setup",
+            entry.entry_id,
+        )
+        return
+
+    new_interval = _get_update_interval(entry)
+
+    if coordinator.update_interval == new_interval:
+        LOGGER.debug(
+            "Meteomatics entry %s already using update interval %s", 
+            entry.entry_id,
+            new_interval,
+        )
+        return
+
+    try:
+        await coordinator.async_set_update_interval(new_interval)
+    except AttributeError:  # Home Assistant < 2024.8
+        coordinator.update_interval = new_interval
+
+    await coordinator.async_request_refresh()

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.6] - 2025-11-05
+### Fixed
+- Ignore option updates that arrive before the Meteomatics entry finishes setting up so Home Assistant no longer raises `ConfigEntryNotReady` when the update interval is adjusted.
+- Update the coordinator interval only when it actually changes and remain compatible with older Home Assistant cores.
+
 ## [0.1.5] - 2025-11-05
 ### Fixed
 - Ensure reloaded entries wait for an initial data refresh and surface configuration errors instead of silently keeping stale data.
