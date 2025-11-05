@@ -16,9 +16,16 @@ from homeassistant.components.weather import (
     ATTR_FORECAST_WIND_SPEED,
     Forecast,
     WeatherEntity,
+    WeatherEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME
+from homeassistant.const import (
+    CONF_NAME,
+    UnitOfLength,
+    UnitOfPressure,
+    UnitOfSpeed,
+    UnitOfTemperature,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -59,6 +66,13 @@ class MeteomaticsWeather(
         self._attr_unique_id = entry.entry_id
         self._attr_should_poll = False
         self._attr_attribution = ATTRIBUTION
+        self._attr_supported_features = (
+            WeatherEntityFeature.FORECAST_HOURLY | WeatherEntityFeature.FORECAST_DAILY
+        )
+        self._attr_native_temperature_unit = UnitOfTemperature.CELSIUS
+        self._attr_native_pressure_unit = UnitOfPressure.HPA
+        self._attr_native_wind_speed_unit = UnitOfSpeed.METERS_PER_SECOND
+        self._attr_native_precipitation_unit = UnitOfLength.MILLIMETERS
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -70,20 +84,32 @@ class MeteomaticsWeather(
         )
 
     @property
-    def temperature(self) -> float | None:
+    def native_temperature(self) -> float | None:
         return self.coordinator.data.get("current", {}).get("temperature")
+
+    @property
+    def temperature(self) -> float | None:
+        return self.native_temperature
 
     @property
     def humidity(self) -> float | None:
         return self.coordinator.data.get("current", {}).get("humidity")
 
     @property
-    def pressure(self) -> float | None:
+    def native_pressure(self) -> float | None:
         return self.coordinator.data.get("current", {}).get("pressure")
 
     @property
-    def wind_speed(self) -> float | None:
+    def pressure(self) -> float | None:
+        return self.native_pressure
+
+    @property
+    def native_wind_speed(self) -> float | None:
         return self.coordinator.data.get("current", {}).get("wind_speed")
+
+    @property
+    def wind_speed(self) -> float | None:
+        return self.native_wind_speed
 
     @property
     def wind_bearing(self) -> float | None:
@@ -103,11 +129,17 @@ class MeteomaticsWeather(
 
     @property
     def forecast_hourly(self) -> list[Forecast] | None:
-        return [self._format_forecast(entry) for entry in self.coordinator.data.get("hourly", [])]
+        hourly = self.coordinator.data.get("hourly")
+        if not hourly:
+            return None
+        return [self._format_forecast(entry) for entry in hourly]
 
     @property
     def forecast_daily(self) -> list[Forecast] | None:
-        return [self._format_forecast(entry, daily=True) for entry in self.coordinator.data.get("daily", [])]
+        daily = self.coordinator.data.get("daily")
+        if not daily:
+            return None
+        return [self._format_forecast(entry, daily=True) for entry in daily]
 
     def _format_forecast(self, data: dict[str, object], daily: bool = False) -> Forecast:
         forecast: Forecast = {
