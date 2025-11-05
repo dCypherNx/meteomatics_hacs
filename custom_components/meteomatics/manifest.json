@@ -2,11 +2,11 @@
   "domain": "meteomatics",
   "name": "Meteomatics Weather",
   "version": "0.1.1",
-  "documentation": "https://github.com/meteomatics/meteomatics_hacs",
-  "issue_tracker": "https://github.com/meteomatics/meteomatics_hacs/issues",
+  "documentation": "https://github.com/dCypherNx/meteomatics_hacs",
+  "issue_tracker": "https://github.com/dCypherNx/meteomatics_hacs/issues",
   "iot_class": "cloud_polling",
   "config_flow": true,
   "requirements": [],
-  "codeowners": ["@meteomatics"],
+  "codeowners": ["@dCypherNx"],
   "loggers": ["custom_components.meteomatics"]
 }
