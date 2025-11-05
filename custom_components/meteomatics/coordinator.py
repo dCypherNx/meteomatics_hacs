@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .const import (
     API_BASE_URL,
     DAILY_DAYS,
+    DEFAULT_MODEL,
     HOURLY_HOURS,
     WEATHER_SYMBOL_MAP,
 )
@@ -40,6 +42,12 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._password = password
         self._latitude = latitude
         self._longitude = longitude
+        time_zone_name = hass.config.time_zone
+        self._time_zone = (
+            dt_util.get_time_zone(time_zone_name)
+            if time_zone_name
+            else dt_util.UTC
+        )
         super().__init__(
             hass,
             LOGGER,
@@ -63,18 +71,19 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
     async def _fetch_hourly(self, session: aiohttp.ClientSession) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-        end = now + timedelta(hours=HOURLY_HOURS)
-        timerange = f"{now:%Y-%m-%dT%H:%M:%SZ}--{end:%Y-%m-%dT%H:%M:%SZ}:PT1H"
+        now = dt_util.utcnow().astimezone(self._time_zone)
+        now = now.replace(minute=0, second=0, microsecond=0)
+        end = (now + timedelta(hours=HOURLY_HOURS)).astimezone(self._time_zone)
+        timerange = f"{self._format_datetime(now)}--{self._format_datetime(end)}:PT1H"
         parameters = ",".join(
             [
                 "t_2m:C",
                 "weather_symbol_1h:idx",
                 "wind_speed_10m:ms",
                 "wind_dir_10m:d",
-                "pressure_mean_sea_level:hPa",
-                "relative_humidity_2m:p",
+                "msl_pressure:hPa",
                 "precip_1h:mm",
+                "wind_gusts_10m_1h:ms",
             ]
         )
 
@@ -86,9 +95,10 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return current, hourly_forecast
 
     async def _fetch_daily(self, session: aiohttp.ClientSession) -> list[dict[str, Any]]:
-        now = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        end = now + timedelta(days=DAILY_DAYS)
-        timerange = f"{now:%Y-%m-%dT%H:%M:%SZ}--{end:%Y-%m-%dT%H:%M:%SZ}:P1D"
+        now = dt_util.utcnow().astimezone(self._time_zone)
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = (start + timedelta(days=DAILY_DAYS)).astimezone(self._time_zone)
+        timerange = f"{self._format_datetime(start)}--{self._format_datetime(end)}:P1D"
         parameters = ",".join(
             [
                 "t_max_2m_24h:C",
@@ -96,6 +106,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "weather_symbol_24h:idx",
                 "precip_24h:mm",
                 "wind_speed_10m:ms",
+                "wind_gusts_10m_24h:ms",
             ]
         )
 
@@ -106,7 +117,12 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _request(self, session: aiohttp.ClientSession, timerange: str, parameters: str) -> dict[str, Any]:
         url = f"{API_BASE_URL}/{timerange}/{parameters}/{self._latitude},{self._longitude}/json"
-        async with session.get(url, auth=aiohttp.BasicAuth(self._username, self._password), timeout=30) as response:
+        async with session.get(
+            url,
+            auth=aiohttp.BasicAuth(self._username, self._password),
+            params={"model": DEFAULT_MODEL},
+            timeout=30,
+        ) as response:
             response.raise_for_status()
             return await response.json()
 
@@ -123,11 +139,15 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             parsed[param_name] = {"dates": dates}
         return parsed
 
+    @staticmethod
+    def _format_datetime(value: datetime) -> str:
+        return value.isoformat(timespec="seconds")
+
     def _build_current(self, parsed: dict[str, dict[str, list[dict[str, Any]]]], now: datetime) -> dict[str, Any]:
         current_time = now.replace(minute=0, second=0, microsecond=0)
         temperature = self._value_at(parsed, "t_2m:C", current_time)
         humidity = self._value_at(parsed, "relative_humidity_2m:p", current_time)
-        pressure = self._value_at(parsed, "pressure_mean_sea_level:hPa", current_time)
+        pressure = self._value_at(parsed, "msl_pressure:hPa", current_time)
         wind_speed = self._value_at(parsed, "wind_speed_10m:ms", current_time)
         wind_bearing = self._value_at(parsed, "wind_dir_10m:d", current_time)
         condition = WEATHER_SYMBOL_MAP.get(
@@ -158,7 +178,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "temperature": entry.get("value"),
                     "condition": condition,
                     "precipitation": self._value_at(parsed, "precip_1h:mm", dt),
-                    "pressure": self._value_at(parsed, "pressure_mean_sea_level:hPa", dt),
+                    "pressure": self._value_at(parsed, "msl_pressure:hPa", dt),
                     "wind_speed": self._value_at(parsed, "wind_speed_10m:ms", dt),
                     "wind_bearing": self._value_at(parsed, "wind_dir_10m:d", dt),
                     "humidity": self._value_at(parsed, "relative_humidity_2m:p", dt),
