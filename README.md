@@ -17,7 +17,7 @@ This repository provides a Home Assistant custom component that connects to the 
 ### Via HACS (recommended)
 
 1. Ensure [HACS](https://hacs.xyz/) is installed in your Home Assistant instance.
-2. In HACS, go to **Integrations → … (three dots) → Custom repositories** and add `https://github.com/yourname/meteomatics_hacs` as a **Integration** repository.
+2. In HACS, go to **Integrations → … (three dots) → Custom repositories** and add `https://github.com/meteomatics/meteomatics_hacs` as a **Integration** repository.
 3. After adding the repository, search for **Meteomatics Weather** within HACS and install it.
 4. Restart Home Assistant after the installation completes.
 
