@@ -44,6 +44,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         latitude=entry.data[CONF_LATITUDE],
         longitude=entry.data[CONF_LONGITUDE],
         update_interval=_get_update_interval(entry),
+        config_entry=entry,
     )
 
     hass.data[DOMAIN][entry.entry_id] = coordinator

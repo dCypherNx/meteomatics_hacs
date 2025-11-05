@@ -99,11 +99,11 @@ class MeteomaticsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return MeteomaticsOptionsFlow(config_entry)
 
 
-class MeteomaticsOptionsFlow(config_entries.OptionsFlow):
+class MeteomaticsOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
     """Handle options flow for Meteomatics."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+        super().__init__(config_entry)
 
     async def async_step_init(self, user_input: Mapping[str, Any] | None = None) -> FlowResult:
         if user_input is not None:

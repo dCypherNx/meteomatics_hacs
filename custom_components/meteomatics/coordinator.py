@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -37,6 +38,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         latitude: float,
         longitude: float,
         update_interval: timedelta,
+        config_entry: ConfigEntry | None = None,
     ) -> None:
         self._username = username
         self._password = password
@@ -54,6 +56,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name="Meteomatics",
             update_interval=update_interval,
         )
+        self.config_entry = config_entry
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Meteomatics."""
@@ -84,6 +87,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "msl_pressure:hPa",
                 "precip_1h:mm",
                 "wind_gusts_10m_1h:ms",
+                "relative_humidity_2m:p",
             ]
         )
 
