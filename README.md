@@ -14,10 +14,22 @@ This repository provides a Home Assistant custom component that connects to the 
 
 ## Installation
 
+### Via HACS (recommended)
+
+1. Ensure [HACS](https://hacs.xyz/) is installed in your Home Assistant instance.
+2. In HACS, go to **Integrations → … (three dots) → Custom repositories** and add `https://github.com/yourname/meteomatics_hacs` as a **Integration** repository.
+3. After adding the repository, search for **Meteomatics Weather** within HACS and install it.
+4. Restart Home Assistant after the installation completes.
+
+### Manual installation
+
 1. Copy the `custom_components/meteomatics` directory into your Home Assistant `custom_components` folder.
 2. Restart Home Assistant.
-3. Go to **Settings → Devices & Services → Add Integration** and search for **Meteomatics**.
-4. Enter your Meteomatics credentials, desired latitude/longitude and the preferred update interval.
+
+### Configuration
+
+1. Go to **Settings → Devices & Services → Add Integration** and search for **Meteomatics**.
+2. Enter your Meteomatics credentials, desired latitude/longitude and the preferred update interval.
 
 > **Note:** The Meteomatics basic/free plan only allows access to a limited set of parameters and forecasting horizon. The integration uses endpoints compatible with this plan, but you must have an active Meteomatics account.
 
