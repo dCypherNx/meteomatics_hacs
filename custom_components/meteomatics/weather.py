@@ -141,6 +141,14 @@ class MeteomaticsWeather(
             return None
         return [self._format_forecast(entry, daily=True) for entry in daily]
 
+    async def async_forecast_hourly(self) -> list[Forecast] | None:
+        """Return hourly forecast data."""
+        return self.forecast_hourly
+
+    async def async_forecast_daily(self) -> list[Forecast] | None:
+        """Return daily forecast data."""
+        return self.forecast_daily
+
     def _format_forecast(self, data: dict[str, object], daily: bool = False) -> Forecast:
         forecast: Forecast = {
             ATTR_FORECAST_TIME: self._ensure_iso(data.get("datetime")),
