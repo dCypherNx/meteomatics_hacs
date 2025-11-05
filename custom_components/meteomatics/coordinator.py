@@ -55,8 +55,8 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             LOGGER,
             name="Meteomatics",
             update_interval=update_interval,
+            config_entry=config_entry,
         )
-        self.config_entry = config_entry
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Meteomatics."""
