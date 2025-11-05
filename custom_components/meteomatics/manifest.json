@@ -1,7 +1,7 @@
 {
   "domain": "meteomatics",
   "name": "Meteomatics Weather",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "documentation": "https://github.com/dCypherNx/meteomatics_hacs",
   "issue_tracker": "https://github.com/dCypherNx/meteomatics_hacs/issues",
   "iot_class": "cloud_polling",
