@@ -1,0 +1,74 @@
+"""The Meteomatics Home Assistant integration."""
+
+from __future__ import annotations
+
+import logging
+from datetime import timedelta
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
+
+from .const import (
+    CONF_LATITUDE,
+    CONF_LONGITUDE,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+)
+from .coordinator import MeteomaticsDataUpdateCoordinator
+
+LOGGER = logging.getLogger(__name__)
+
+PLATFORMS: list[Platform] = [Platform.WEATHER]
+
+
+def _get_update_interval(entry: ConfigEntry) -> timedelta:
+    minutes = entry.options.get(
+        CONF_UPDATE_INTERVAL,
+        entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+    )
+    return timedelta(minutes=minutes)
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Meteomatics from a config entry."""
+    hass.data.setdefault(DOMAIN, {})
+
+    LOGGER.debug("Setting up Meteomatics entry %s", entry.entry_id)
+
+    coordinator = MeteomaticsDataUpdateCoordinator(
+        hass,
+        username=entry.data[CONF_USERNAME],
+        password=entry.data[CONF_PASSWORD],
+        latitude=entry.data[CONF_LATITUDE],
+        longitude=entry.data[CONF_LONGITUDE],
+        update_interval=_get_update_interval(entry),
+    )
+
+    hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    await coordinator.async_config_entry_first_refresh()
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a Meteomatics config entry."""
+    LOGGER.debug("Unloading Meteomatics entry %s", entry.entry_id)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+
+    return unload_ok
+
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload Meteomatics config entry when options change."""
+    await async_unload_entry(hass, entry)
+    await async_setup_entry(hass, entry)

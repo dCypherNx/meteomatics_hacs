@@ -1,0 +1,11 @@
+{
+  "domain": "meteomatics",
+  "name": "Meteomatics Weather",
+  "version": "0.1.0",
+  "documentation": "https://github.com/yourname/meteomatics_hacs",
+  "iot_class": "cloud_polling",
+  "config_flow": true,
+  "requirements": [],
+  "codeowners": ["@yourname"],
+  "loggers": ["custom_components.meteomatics"]
+}

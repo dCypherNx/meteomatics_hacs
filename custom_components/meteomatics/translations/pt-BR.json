@@ -1,0 +1,32 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Meteomatics",
+        "description": "Informe suas credenciais Meteomatics e a localização.",
+        "data": {
+          "username": "Usuário",
+          "password": "Senha",
+          "latitude": "Latitude",
+          "longitude": "Longitude",
+          "update_interval": "Intervalo de atualização (minutos)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Usuário ou senha inválidos.",
+      "cannot_connect": "Falha ao conectar com a API da Meteomatics."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opções do Meteomatics",
+        "description": "Ajuste a frequência de atualização dos dados.",
+        "data": {
+          "update_interval": "Intervalo de atualização (minutos)"
+        }
+      }
+    }
+  }
+}
