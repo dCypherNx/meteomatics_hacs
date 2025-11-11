@@ -50,29 +50,61 @@ DAILY_PARAMETERS = [
 
 BASIC_DAILY_FETCH_HOURS = (3, 9, 15, 21)
 
-WEATHER_SYMBOL_MAP = {
-    1: "sunny",
+# Map Meteomatics weather symbols (aligned with WMO weather codes as documented
+# in https://www.meteomatics.com/en/api/available-parameters/weather-parameter/general-weather-state/#weather_symb)
+# to Home Assistant weather conditions.
+_BASE_WEATHER_SYMBOL_MAP = {
+    **dict.fromkeys((0, 1), "sunny"),
     2: "partlycloudy",
-    3: "partlycloudy",
-    4: "cloudy",
+    **dict.fromkeys((3, 4), "cloudy"),
     5: "fog",
-    6: "rainy",
-    7: "rainy",
-    8: "rainy",
-    9: "rainy",
-    10: "rainy",
-    11: "snowy",
-    12: "snowy",
-    13: "snowy",
-    14: "snowy",
-    15: "snowy",
-    16: "hail",
-    17: "lightning",
-    18: "lightning-rainy",
-    19: "tornado",
-    20: "windy",
-    21: "windy-variant",
-    22: "exceptional",
+    **dict.fromkeys((6, 7, 8, 9), "exceptional"),
+    **dict.fromkeys((10, 11, 12), "fog"),
+    13: "lightning",
+    **dict.fromkeys((14, 15, 16, 17, 18, 19), "partlycloudy"),
+    **dict.fromkeys((20, 21), "rainy"),
+    22: "snowy",
+    23: "snowy-rainy",
+    24: "rainy",
+    25: "rainy",
+    26: "snowy",
+    **dict.fromkeys((27, 28), "hail"),
+    29: "lightning",
+    **dict.fromkeys((30, 31, 32, 33, 34, 35, 36), "windy"),
+    **dict.fromkeys((37, 38, 39), "snowy"),
+    **dict.fromkeys((40, 41, 42, 43, 44, 45, 46, 47, 48, 49), "fog"),
+    **dict.fromkeys((50, 51, 52, 53, 54, 55), "rainy"),
+    **dict.fromkeys((56, 57, 58, 59), "snowy-rainy"),
+    **dict.fromkeys((60, 61, 62, 63), "rainy"),
+    **dict.fromkeys((64, 65), "pouring"),
+    **dict.fromkeys((66, 67, 68, 69), "snowy-rainy"),
+    **dict.fromkeys((70, 71, 72, 73, 74, 75, 76, 77, 78), "snowy"),
+    79: "snowy-rainy",
+    **dict.fromkeys((80, 81), "rainy"),
+    82: "pouring",
+    **dict.fromkeys((83, 84), "snowy-rainy"),
+    **dict.fromkeys((85, 86), "snowy"),
+    **dict.fromkeys((87, 88, 89, 90), "hail"),
+    91: "rainy",
+    92: "pouring",
+    **dict.fromkeys((93, 94), "snowy-rainy"),
+    **dict.fromkeys((95, 96, 97, 98, 99), "lightning-rainy"),
+}
+
+# Meteomatics documents that weather symbols above 100 repeat the same weather
+# states with alternative icon variants that are used at night. We therefore map
+# them to the same Home Assistant conditions, except for explicitly mapping the
+# daytime "sunny" condition to the night-time "clear-night" equivalent.
+_NIGHT_CONDITION_MAP = {
+    "sunny": "clear-night",
+}
+
+WEATHER_SYMBOL_MAP = {
+    **_BASE_WEATHER_SYMBOL_MAP,
+    **{
+        symbol + 100: _NIGHT_CONDITION_MAP.get(condition, condition)
+        for symbol, condition in _BASE_WEATHER_SYMBOL_MAP.items()
+    },
 }
 
 ATTRIBUTION = "Weather data provided by Meteomatics"
