@@ -252,7 +252,6 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> dict[str, Any]:
         current_time = now.replace(minute=0, second=0, microsecond=0)
         temperature = self._value_at(parsed, "t_2m:C", current_time)
-        humidity = self._value_at(parsed, "relative_humidity_2m:p", current_time)
         pressure = self._value_at(parsed, "msl_pressure:hPa", current_time)
         wind_speed = self._value_at(parsed, "wind_speed_10m:ms", current_time)
         wind_bearing = self._value_at(parsed, "wind_dir_10m:d", current_time)
@@ -264,7 +263,6 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return {
             "temperature": temperature,
-            "humidity": humidity,
             "pressure": pressure,
             "wind_speed": wind_speed,
             "wind_bearing": wind_bearing,
@@ -293,7 +291,6 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "pressure": self._value_at(parsed, "msl_pressure:hPa", dt),
                     "wind_speed": self._value_at(parsed, "wind_speed_10m:ms", dt),
                     "wind_bearing": self._value_at(parsed, "wind_dir_10m:d", dt),
-                    "humidity": self._value_at(parsed, "relative_humidity_2m:p", dt),
                     "wind_gust": self._value_at(parsed, "wind_gusts_10m_1h:ms", dt),
                     "uv_index": self._value_at(parsed, "uv:idx", dt),
                     "precipitation_24h": self._value_at(parsed, "precip_24h:mm", dt),
@@ -309,7 +306,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             dt = self._parse_time(entry.get("date"))
             if dt is None:
                 continue
-            condition = self._infer_daily_condition(dt)
+            condition = self._daily_condition(parsed, dt)
             midday = dt + timedelta(hours=12)
             precipitation = self._value_at(parsed, "precip_24h:mm", dt)
             if precipitation is None:
@@ -345,6 +342,21 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 }
             )
         return daily
+
+    def _daily_condition(
+        self, parsed: dict[str, dict[str, list[dict[str, Any]]]], day_start: datetime
+    ) -> str | None:
+        raw_symbol = self._value_at(parsed, "weather_symbol_24h:idx", day_start)
+        if raw_symbol is not None:
+            try:
+                mapped = WEATHER_SYMBOL_MAP.get(int(raw_symbol))
+                if mapped is not None:
+                    return mapped
+            except (TypeError, ValueError):
+                LOGGER.debug(
+                    "Invalid weather symbol for 24h data: %s", raw_symbol, exc_info=True
+                )
+        return self._infer_daily_condition(day_start)
 
     def _extract_hourly_symbol_entries(
         self, parsed: dict[str, dict[str, list[dict[str, Any]]]]

@@ -25,7 +25,6 @@ MAX_PARAMETERS_PER_REQUEST = 10
 
 HOURLY_PARAMETERS = [
     "t_2m:C",
-    "relative_humidity_2m:p",
     "msl_pressure:hPa",
     "wind_speed_10m:ms",
     "wind_dir_10m:d",
@@ -44,9 +43,9 @@ DAILY_PARAMETERS = [
     "sunset:sql",
     "wind_speed_10m:ms",
     "wind_dir_10m:d",
-    "msl_pressure:hPa",
     "uv:idx",
     "precip_24h:mm",
+    "weather_symbol_24h:idx",
 ]
 
 BASIC_DAILY_FETCH_HOURS = (3, 9, 15, 21)
