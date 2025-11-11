@@ -13,6 +13,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 
@@ -20,29 +21,28 @@ from .const import (
     API_BASE_URL,
     CONF_LATITUDE,
     CONF_LONGITUDE,
-    CONF_PLAN_TYPE,
     DEFAULT_MODEL,
     DOMAIN,
-    PLAN_TYPE_OPTIONS,
-    PLAN_TYPE_PAID_TRIAL,
 )
 
 DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
-        vol.Required(CONF_PLAN_TYPE, default=PLAN_TYPE_PAID_TRIAL): vol.In(
-            PLAN_TYPE_OPTIONS
-        ),
-        vol.Required(CONF_LATITUDE): vol.Coerce(float),
-        vol.Required(CONF_LONGITUDE): vol.Coerce(float),
     }
 )
 
 
 async def validate_input(hass: HomeAssistant, data: Mapping[str, Any]) -> None:
     """Validate user input by performing a simple API request."""
+
     session = async_get_clientsession(hass)
+    latitude = data.get(CONF_LATITUDE, hass.config.latitude)
+    longitude = data.get(CONF_LONGITUDE, hass.config.longitude)
+
+    if latitude is None or longitude is None:
+        raise LocationNotConfiguredError
+
     time_zone_name = hass.config.time_zone
     time_zone = (
         dt_util.get_time_zone(time_zone_name)
@@ -51,9 +51,11 @@ async def validate_input(hass: HomeAssistant, data: Mapping[str, Any]) -> None:
     )
     now = dt_util.utcnow().astimezone(time_zone)
     now = now.replace(minute=0, second=0, microsecond=0)
-    timerange = f"{now.isoformat(timespec='seconds')}--{now.isoformat(timespec='seconds')}:PT1H"
+    timerange = (
+        f"{now.isoformat(timespec='seconds')}--{now.isoformat(timespec='seconds')}:PT1H"
+    )
     parameters = "t_2m:C"
-    url = f"{API_BASE_URL}/{timerange}/{parameters}/{data[CONF_LATITUDE]},{data[CONF_LONGITUDE]}/json"
+    url = f"{API_BASE_URL}/{timerange}/{parameters}/{latitude},{longitude}/json"
 
     async with session.get(
         url,
@@ -64,13 +66,24 @@ async def validate_input(hass: HomeAssistant, data: Mapping[str, Any]) -> None:
         response.raise_for_status()
 
 
+class LocationNotConfiguredError(HomeAssistantError):
+    """Error raised when Home Assistant has no configured location."""
+
+    def __init__(self) -> None:
+        super().__init__("Home Assistant location is not configured")
+        self.reason = "no_location"
+
+
 class MeteomaticsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Meteomatics."""
 
     VERSION = 1
 
-    async def async_step_user(self, user_input: Mapping[str, Any] | None = None) -> FlowResult:
+    async def async_step_user(
+        self, user_input: Mapping[str, Any] | None = None
+    ) -> FlowResult:
         """Handle the initial step."""
+
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -83,21 +96,38 @@ class MeteomaticsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "cannot_connect"
             except (aiohttp.ClientError, asyncio.TimeoutError):
                 errors["base"] = "cannot_connect"
+            except LocationNotConfiguredError as err:
+                errors["base"] = err.reason
             else:
-                await self.async_set_unique_id(
-                    f"{user_input[CONF_LATITUDE]:.4f}_{user_input[CONF_LONGITUDE]:.4f}"
-                )
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title="Meteomatics",
-                    data=dict(user_input),
-                )
+                latitude = self.hass.config.latitude
+                longitude = self.hass.config.longitude
 
-        return self.async_show_form(step_id="user", data_schema=DATA_SCHEMA, errors=errors)
+                if latitude is None or longitude is None:
+                    errors["base"] = "no_location"
+                else:
+                    await self.async_set_unique_id(
+                        f"{latitude:.4f}_{longitude:.4f}"
+                    )
+                    self._abort_if_unique_id_configured()
+                    return self.async_create_entry(
+                        title="Meteomatics",
+                        data={
+                            CONF_USERNAME: user_input[CONF_USERNAME],
+                            CONF_PASSWORD: user_input[CONF_PASSWORD],
+                            CONF_LATITUDE: latitude,
+                            CONF_LONGITUDE: longitude,
+                        },
+                    )
+
+        return self.async_show_form(
+            step_id="user", data_schema=DATA_SCHEMA, errors=errors
+        )
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
         return MeteomaticsOptionsFlow(config_entry)
 
 
@@ -106,13 +136,15 @@ class MeteomaticsOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         super().__init__(config_entry)
-    async def async_step_init(self, user_input: Mapping[str, Any] | None = None) -> FlowResult:
+
+    async def async_step_init(
+        self, user_input: Mapping[str, Any] | None = None
+    ) -> FlowResult:
         errors: dict[str, str] = {}
 
         if user_input is not None:
             new_username = user_input[CONF_USERNAME]
             new_password = user_input[CONF_PASSWORD]
-            new_plan_type = user_input[CONF_PLAN_TYPE]
 
             validation_data = {
                 CONF_USERNAME: new_username,
@@ -130,12 +162,13 @@ class MeteomaticsOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                     errors["base"] = "cannot_connect"
             except (aiohttp.ClientError, asyncio.TimeoutError):
                 errors["base"] = "cannot_connect"
+            except LocationNotConfiguredError as err:
+                errors["base"] = err.reason
             else:
                 new_data = {
                     **self.config_entry.data,
                     CONF_USERNAME: new_username,
                     CONF_PASSWORD: new_password,
-                    CONF_PLAN_TYPE: new_plan_type,
                 }
                 self.hass.config_entries.async_update_entry(
                     self.config_entry,
@@ -154,13 +187,8 @@ class MeteomaticsOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
                     CONF_PASSWORD,
                     default=self.config_entry.data[CONF_PASSWORD],
                 ): str,
-                vol.Required(
-                    CONF_PLAN_TYPE,
-                    default=self.config_entry.data.get(
-                        CONF_PLAN_TYPE, PLAN_TYPE_PAID_TRIAL
-                    ),
-                ): vol.In(PLAN_TYPE_OPTIONS),
             }
         )
 
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+

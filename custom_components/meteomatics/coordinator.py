@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Iterable
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
@@ -18,14 +17,11 @@ from .const import (
     API_BASE_URL,
     BASIC_DAILY_FETCH_HOURS,
     DAILY_DAYS,
-    DAILY_PARAMETERS_BASIC,
-    DAILY_PARAMETERS_PAID_TRIAL,
+    DAILY_PARAMETERS,
     DEFAULT_MODEL,
     HOURLY_HOURS,
-    HOURLY_PARAMETERS_BASIC,
-    HOURLY_PARAMETERS_PAID_TRIAL,
-    PLAN_TYPE_BASIC,
-    PLAN_TYPE_PAID_TRIAL,
+    HOURLY_PARAMETERS,
+    MAX_PARAMETERS_PER_REQUEST,
     WEATHER_SYMBOL_MAP,
 )
 
@@ -45,17 +41,13 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         latitude: float,
         longitude: float,
         update_interval: timedelta,
-        plan_type: str = PLAN_TYPE_PAID_TRIAL,
         config_entry: ConfigEntry | None = None,
     ) -> None:
         self._username = username
         self._password = password
         self._latitude = latitude
         self._longitude = longitude
-        self._plan_type = plan_type
-        self._daily_fetch_hours: tuple[int, ...] | None = (
-            BASIC_DAILY_FETCH_HOURS if plan_type == PLAN_TYPE_BASIC else None
-        )
+        self._daily_fetch_hours: tuple[int, ...] | None = BASIC_DAILY_FETCH_HOURS
         time_zone_name = hass.config.time_zone
         self._time_zone = (
             dt_util.get_time_zone(time_zone_name)
@@ -66,6 +58,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._daily_data: list[dict[str, Any]] = []
         self._next_daily_fetch: datetime | None = None
         self._hourly_symbol_entries: list[tuple[datetime, str | None]] = []
+        self._latest_hourly_parsed: dict[str, dict[str, list[dict[str, Any]]]] = {}
         super().__init__(
             hass,
             LOGGER,
@@ -85,23 +78,9 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._rate_limit_reset = None
         return True
 
-    def update_plan_type(self, plan_type: str) -> bool:
-        """Update the plan type used for Meteomatics requests."""
-
-        if plan_type == self._plan_type:
-            return False
-
-        self._plan_type = plan_type
-        self._daily_fetch_hours = (
-            BASIC_DAILY_FETCH_HOURS if plan_type == PLAN_TYPE_BASIC else None
-        )
-        self._next_daily_fetch = None
-        self._daily_data = []
-        self._rate_limit_reset = None
-        return True
-
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Meteomatics."""
+
         if self._rate_limit_reset and dt_util.utcnow() < self._rate_limit_reset:
             raise UpdateFailed(
                 "Meteomatics rate limit reached; waiting to retry until "
@@ -125,15 +104,16 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "daily": daily,
         }
 
-    async def _fetch_hourly(self, session: aiohttp.ClientSession) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    async def _fetch_hourly(
+        self, session: aiohttp.ClientSession
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         now = dt_util.utcnow().astimezone(self._time_zone)
         now = now.replace(minute=0, second=0, microsecond=0)
         end = (now + timedelta(hours=HOURLY_HOURS)).astimezone(self._time_zone)
         timerange = f"{self._format_datetime(now)}--{self._format_datetime(end)}:PT1H"
-        parameters = ",".join(self._hourly_parameters)
 
-        data = await self._request(session, timerange, parameters)
-        parsed = self._parse_response(data)
+        parsed = await self._fetch_parameters(session, timerange, HOURLY_PARAMETERS)
+        self._latest_hourly_parsed = parsed
 
         current = self._build_current(parsed, now)
         hourly_forecast = self._build_hourly_forecast(parsed)
@@ -147,12 +127,25 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         end = (start + timedelta(days=DAILY_DAYS)).astimezone(self._time_zone)
         timerange = f"{self._format_datetime(start)}--{self._format_datetime(end)}:P1D"
-        parameters = ",".join(self._daily_parameters)
 
-        data = await self._request(session, timerange, parameters)
-        parsed = self._parse_response(data)
-
+        parsed = await self._fetch_parameters(session, timerange, DAILY_PARAMETERS)
         return self._build_daily_forecast(parsed)
+
+    async def _fetch_parameters(
+        self,
+        session: aiohttp.ClientSession,
+        timerange: str,
+        parameters: Iterable[str],
+    ) -> dict[str, dict[str, list[dict[str, Any]]]]:
+        combined: dict[str, dict[str, list[dict[str, Any]]]] = {}
+
+        for chunk in self._chunk_parameters(parameters):
+            data = await self._perform_request(session, timerange, chunk)
+            parsed = self._parse_response(data)
+            for key, value in parsed.items():
+                combined[key] = value
+
+        return combined
 
     async def _ensure_daily_data(
         self, session: aiohttp.ClientSession, now_local: datetime
@@ -191,8 +184,16 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         return next_day
 
-    async def _request(self, session: aiohttp.ClientSession, timerange: str, parameters: str) -> dict[str, Any]:
-        url = f"{API_BASE_URL}/{timerange}/{parameters}/{self._latitude},{self._longitude}/json"
+    async def _perform_request(
+        self,
+        session: aiohttp.ClientSession,
+        timerange: str,
+        parameters: Iterable[str],
+    ) -> dict[str, Any]:
+        params = ",".join(parameters)
+        url = (
+            f"{API_BASE_URL}/{timerange}/{params}/{self._latitude},{self._longitude}/json"
+        )
         async with session.get(
             url,
             auth=aiohttp.BasicAuth(self._username, self._password),
@@ -214,7 +215,9 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "Meteomatics API rate limit reached. Waiting one hour before retrying."
         )
 
-    def _parse_response(self, data: dict[str, Any]) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    def _parse_response(
+        self, data: dict[str, Any]
+    ) -> dict[str, dict[str, list[dict[str, Any]]]]:
         parsed: dict[str, dict[str, list[dict[str, Any]]]] = {}
         for parameter in data.get("data", []):
             param_name = parameter.get("parameter")
@@ -228,10 +231,23 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return parsed
 
     @staticmethod
+    def _chunk_parameters(parameters: Iterable[str]) -> Iterable[list[str]]:
+        chunk: list[str] = []
+        for parameter in parameters:
+            chunk.append(parameter)
+            if len(chunk) == MAX_PARAMETERS_PER_REQUEST:
+                yield chunk
+                chunk = []
+        if chunk:
+            yield chunk
+
+    @staticmethod
     def _format_datetime(value: datetime) -> str:
         return value.isoformat(timespec="seconds")
 
-    def _build_current(self, parsed: dict[str, dict[str, list[dict[str, Any]]]], now: datetime) -> dict[str, Any]:
+    def _build_current(
+        self, parsed: dict[str, dict[str, list[dict[str, Any]]]], now: datetime
+    ) -> dict[str, Any]:
         current_time = now.replace(minute=0, second=0, microsecond=0)
         temperature = self._value_at(parsed, "t_2m:C", current_time)
         humidity = self._value_at(parsed, "relative_humidity_2m:p", current_time)
@@ -255,7 +271,9 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "uv_index": uv_index,
         }
 
-    def _build_hourly_forecast(self, parsed: dict[str, dict[str, list[dict[str, Any]]]]) -> list[dict[str, Any]]:
+    def _build_hourly_forecast(
+        self, parsed: dict[str, dict[str, list[dict[str, Any]]]]
+    ) -> list[dict[str, Any]]:
         hourly: list[dict[str, Any]] = []
         for entry in parsed.get("t_2m:C", {}).get("dates", []):
             dt = self._parse_time(entry.get("date"))
@@ -277,32 +295,49 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "wind_gust": self._value_at(parsed, "wind_gusts_10m_1h:ms", dt),
                     "uv_index": self._value_at(parsed, "uv:idx", dt),
                     "precipitation_24h": self._value_at(parsed, "precip_24h:mm", dt),
-                    "wind_gust_24h": self._value_at(
-                        parsed, "wind_gusts_10m_24h:ms", dt
-                    ),
                 }
             )
         return hourly
 
-    def _build_daily_forecast(self, parsed: dict[str, dict[str, list[dict[str, Any]]]]) -> list[dict[str, Any]]:
+    def _build_daily_forecast(
+        self, parsed: dict[str, dict[str, list[dict[str, Any]]]]
+    ) -> list[dict[str, Any]]:
         daily: list[dict[str, Any]] = []
         for entry in parsed.get("t_max_2m_24h:C", {}).get("dates", []):
             dt = self._parse_time(entry.get("date"))
             if dt is None:
                 continue
             condition = self._infer_daily_condition(dt)
+            midday = dt + timedelta(hours=12)
+            precipitation = self._value_at(parsed, "precip_24h:mm", dt)
+            if precipitation is None:
+                precipitation = self._sum_hourly_values(
+                    "precip_1h:mm", dt, dt + timedelta(days=1)
+                )
+            wind_speed = self._value_at(parsed, "wind_speed_10m:ms", dt)
+            if wind_speed is None:
+                wind_speed = self._hourly_value_near("wind_speed_10m:ms", midday)
+            wind_bearing = self._value_at(parsed, "wind_dir_10m:d", dt)
+            if wind_bearing is None:
+                wind_bearing = self._hourly_value_near("wind_dir_10m:d", midday)
+            pressure = self._value_at(parsed, "msl_pressure:hPa", dt)
+            if pressure is None:
+                pressure = self._hourly_value_near("msl_pressure:hPa", midday)
+            uv_index = self._value_at(parsed, "uv:idx", dt)
+            if uv_index is None:
+                uv_index = self._hourly_value_near("uv:idx", midday)
             daily.append(
                 {
                     "datetime": dt,
                     "temperature": entry.get("value"),
                     "templow": self._value_at(parsed, "t_min_2m_24h:C", dt),
                     "condition": condition,
-                    "precipitation": self._value_at(parsed, "precip_24h:mm", dt),
-                    "wind_speed": self._value_at(parsed, "wind_speed_10m:ms", dt),
-                    "wind_bearing": self._value_at(parsed, "wind_dir_10m:d", dt),
+                    "precipitation": precipitation,
+                    "wind_speed": wind_speed,
+                    "wind_bearing": wind_bearing,
                     "wind_gust": self._value_at(parsed, "wind_gusts_10m_24h:ms", dt),
-                    "pressure": self._value_at(parsed, "msl_pressure:hPa", dt),
-                    "uv_index": self._value_at(parsed, "uv:idx", dt),
+                    "pressure": pressure,
+                    "uv_index": uv_index,
                     "sunrise": self._value_at(parsed, "sunrise:sql", dt),
                     "sunset": self._value_at(parsed, "sunset:sql", dt),
                 }
@@ -356,25 +391,48 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if isinstance(dt, datetime):
                 entry["condition"] = self._infer_daily_condition(dt)
 
-    @property
-    def _hourly_parameters(self) -> list[str]:
-        if self._plan_type == PLAN_TYPE_BASIC:
-            return HOURLY_PARAMETERS_BASIC
-        return HOURLY_PARAMETERS_PAID_TRIAL
+    def _hourly_value_near(
+        self, parameter: str, target: datetime
+    ) -> Any:
+        dates = self._latest_hourly_parsed.get(parameter, {}).get("dates", [])
+        best_value: Any = None
+        best_distance: float | None = None
+        for item in dates:
+            dt = self._parse_time(item.get("date"))
+            if dt is None:
+                continue
+            distance = abs((dt - target).total_seconds())
+            if best_distance is None or distance < best_distance:
+                best_distance = distance
+                best_value = item.get("value")
+        return best_value
 
-    @property
-    def _daily_parameters(self) -> list[str]:
-        if self._plan_type == PLAN_TYPE_BASIC:
-            return DAILY_PARAMETERS_BASIC
-        return DAILY_PARAMETERS_PAID_TRIAL
+    def _sum_hourly_values(
+        self, parameter: str, start: datetime, end: datetime
+    ) -> float | None:
+        total = 0.0
+        found = False
+        dates = self._latest_hourly_parsed.get(parameter, {}).get("dates", [])
+        for item in dates:
+            dt = self._parse_time(item.get("date"))
+            if dt is None or dt < start or dt >= end:
+                continue
+            value = item.get("value")
+            try:
+                total += float(value)
+                found = True
+            except (TypeError, ValueError):
+                continue
+        if not found:
+            return None
+        return total
 
-    @property
-    def plan_type(self) -> str:
-        """Return the current plan type."""
-
-        return self._plan_type
-
-    def _value_at(self, parsed: dict[str, dict[str, list[dict[str, Any]]]], parameter: str, target: datetime) -> Any:
+    def _value_at(
+        self,
+        parsed: dict[str, dict[str, list[dict[str, Any]]]],
+        parameter: str,
+        target: datetime,
+    ) -> Any:
         dates = parsed.get(parameter, {}).get("dates", [])
         for item in dates:
             dt = self._parse_time(item.get("date"))
@@ -390,3 +448,4 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
             return None
+

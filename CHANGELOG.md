@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.0] - 2025-11-19
+### Changed
+- Release version 0.3.0 with the simplified configuration flow and refactored coordinator.
+
 ## [0.2.2] - 2025-11-19
 ### Changed
 - Release version 0.2.2.
