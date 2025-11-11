@@ -3,30 +3,47 @@
     "step": {
       "user": {
         "title": "Meteomatics",
-        "description": "Enter your Meteomatics credentials and location.",
+        "description": "Enter your Meteomatics credentials, plan type, and location.",
         "data": {
           "username": "Username",
           "password": "Password",
+          "plan_type": "Plan type",
           "latitude": "Latitude",
           "longitude": "Longitude",
           "update_interval": "Update interval (minutes)"
+        }
+      },
+      "basic_parameters": {
+        "title": "Basic plan parameters",
+        "description": "Select up to five additional parameters to request when using the basic plan.",
+        "data": {
+          "basic_optional_parameters": "Additional parameters"
         }
       }
     },
     "error": {
       "invalid_auth": "Invalid username or password.",
-      "cannot_connect": "Failed to connect to Meteomatics API."
+      "cannot_connect": "Failed to connect to Meteomatics API.",
+      "basic_too_many_parameters": "Select at most five additional parameters."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Meteomatics options",
-        "description": "Update your Meteomatics credentials or adjust how often data is refreshed.",
+        "description": "Update your Meteomatics credentials, plan type, or adjust how often data is refreshed.",
         "data": {
           "username": "Username",
           "password": "Password",
+          "plan_type": "Plan type",
           "update_interval": "Update interval (minutes)"
+        }
+      },
+      "basic_parameters": {
+        "title": "Basic plan parameters",
+        "description": "Select up to five additional parameters to request when using the basic plan.",
+        "data": {
+          "basic_optional_parameters": "Additional parameters"
         }
       }
     }

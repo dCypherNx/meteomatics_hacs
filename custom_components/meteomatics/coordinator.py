@@ -16,9 +16,15 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     API_BASE_URL,
+    BASIC_FIXED_PARAMETERS_BY_SCOPE,
+    BASIC_OPTIONAL_PARAMETER_SCOPES,
     DAILY_DAYS,
+    DAILY_PARAMETERS_PAID_TRIAL,
     DEFAULT_MODEL,
     HOURLY_HOURS,
+    HOURLY_PARAMETERS_PAID_TRIAL,
+    PLAN_TYPE_BASIC,
+    PLAN_TYPE_PAID_TRIAL,
     WEATHER_SYMBOL_MAP,
 )
 
@@ -38,12 +44,20 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         latitude: float,
         longitude: float,
         update_interval: timedelta,
+        plan_type: str = PLAN_TYPE_PAID_TRIAL,
+        basic_optional_parameters: list[str] | None = None,
         config_entry: ConfigEntry | None = None,
     ) -> None:
         self._username = username
         self._password = password
         self._latitude = latitude
         self._longitude = longitude
+        self._plan_type = plan_type
+        self._basic_optional_parameters: set[str] = set(
+            param
+            for param in (basic_optional_parameters or [])
+            if param in BASIC_OPTIONAL_PARAMETER_SCOPES
+        )
         time_zone_name = hass.config.time_zone
         self._time_zone = (
             dt_util.get_time_zone(time_zone_name)
@@ -67,6 +81,30 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self._username = username
         self._password = password
+        self._rate_limit_reset = None
+        return True
+
+    def update_plan_type(self, plan_type: str) -> bool:
+        """Update the plan type used for Meteomatics requests."""
+
+        if plan_type == self._plan_type:
+            return False
+
+        self._plan_type = plan_type
+        self._rate_limit_reset = None
+        return True
+
+    def update_basic_optional_parameters(self, parameters: list[str]) -> bool:
+        """Update the optional parameters for the basic plan."""
+
+        filtered = {
+            param for param in parameters if param in BASIC_OPTIONAL_PARAMETER_SCOPES
+        }
+
+        if filtered == self._basic_optional_parameters:
+            return False
+
+        self._basic_optional_parameters = filtered
         self._rate_limit_reset = None
         return True
 
@@ -99,18 +137,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now = now.replace(minute=0, second=0, microsecond=0)
         end = (now + timedelta(hours=HOURLY_HOURS)).astimezone(self._time_zone)
         timerange = f"{self._format_datetime(now)}--{self._format_datetime(end)}:PT1H"
-        parameters = ",".join(
-            [
-                "t_2m:C",
-                "weather_symbol_1h:idx",
-                "wind_speed_10m:ms",
-                "wind_dir_10m:d",
-                "msl_pressure:hPa",
-                "precip_1h:mm",
-                "wind_gusts_10m_1h:ms",
-                "relative_humidity_2m:p",
-            ]
-        )
+        parameters = ",".join(self._hourly_parameters)
 
         data = await self._request(session, timerange, parameters)
         parsed = self._parse_response(data)
@@ -124,16 +151,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         end = (start + timedelta(days=DAILY_DAYS)).astimezone(self._time_zone)
         timerange = f"{self._format_datetime(start)}--{self._format_datetime(end)}:P1D"
-        parameters = ",".join(
-            [
-                "t_max_2m_24h:C",
-                "t_min_2m_24h:C",
-                "weather_symbol_24h:idx",
-                "precip_24h:mm",
-                "wind_speed_10m:ms",
-                "wind_gusts_10m_24h:ms",
-            ]
-        )
+        parameters = ",".join(self._daily_parameters)
 
         data = await self._request(session, timerange, parameters)
         parsed = self._parse_response(data)
@@ -243,6 +261,33 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 }
             )
         return daily
+
+    @property
+    def _hourly_parameters(self) -> list[str]:
+        if self._plan_type == PLAN_TYPE_BASIC:
+            return self._build_basic_parameters("hourly")
+        return HOURLY_PARAMETERS_PAID_TRIAL
+
+    @property
+    def _daily_parameters(self) -> list[str]:
+        if self._plan_type == PLAN_TYPE_BASIC:
+            return self._build_basic_parameters("daily")
+        return DAILY_PARAMETERS_PAID_TRIAL
+
+    def _build_basic_parameters(self, scope: str) -> list[str]:
+        base = list(BASIC_FIXED_PARAMETERS_BY_SCOPE.get(scope, ()))
+        optionals = [
+            param
+            for param in sorted(self._basic_optional_parameters)
+            if scope in BASIC_OPTIONAL_PARAMETER_SCOPES.get(param, set())
+        ]
+        return base + optionals
+
+    @property
+    def plan_type(self) -> str:
+        """Return the current plan type."""
+
+        return self._plan_type
 
     def _value_at(self, parsed: dict[str, dict[str, list[dict[str, Any]]]], parameter: str, target: datetime) -> Any:
         dates = parsed.get(parameter, {}).get("dates", [])
