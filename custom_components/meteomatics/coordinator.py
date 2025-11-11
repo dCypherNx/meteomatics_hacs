@@ -65,6 +65,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._rate_limit_reset: datetime | None = None
         self._daily_data: list[dict[str, Any]] = []
         self._next_daily_fetch: datetime | None = None
+        self._hourly_symbol_entries: list[tuple[datetime, str | None]] = []
         super().__init__(
             hass,
             LOGGER,
@@ -136,6 +137,9 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         current = self._build_current(parsed, now)
         hourly_forecast = self._build_hourly_forecast(parsed)
+        self._hourly_symbol_entries = self._extract_hourly_symbol_entries(parsed)
+        if self._daily_data:
+            self._update_cached_daily_conditions()
         return current, hourly_forecast
 
     async def _fetch_daily(self, session: aiohttp.ClientSession) -> list[dict[str, Any]]:
@@ -169,6 +173,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._next_daily_fetch = self._calculate_next_daily_fetch(now_local)
             return daily
 
+        self._update_cached_daily_conditions()
         return self._daily_data
 
     def _calculate_next_daily_fetch(self, reference: datetime) -> datetime:
@@ -285,9 +290,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             dt = self._parse_time(entry.get("date"))
             if dt is None:
                 continue
-            condition = WEATHER_SYMBOL_MAP.get(
-                int(self._value_at(parsed, "weather_symbol_24h:idx", dt) or 0),
-            )
+            condition = self._infer_daily_condition(dt)
             daily.append(
                 {
                     "datetime": dt,
@@ -305,6 +308,53 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 }
             )
         return daily
+
+    def _extract_hourly_symbol_entries(
+        self, parsed: dict[str, dict[str, list[dict[str, Any]]]]
+    ) -> list[tuple[datetime, str | None]]:
+        entries: list[tuple[datetime, str | None]] = []
+        for item in parsed.get("weather_symbol_1h:idx", {}).get("dates", []):
+            dt = self._parse_time(item.get("date"))
+            if dt is None:
+                continue
+            value = item.get("value")
+            symbol: str | None = None
+            if value is not None:
+                try:
+                    symbol = WEATHER_SYMBOL_MAP.get(int(value))
+                except (TypeError, ValueError):
+                    symbol = None
+            entries.append((dt, symbol))
+        return entries
+
+    def _infer_daily_condition(self, day_start: datetime) -> str | None:
+        if not self._hourly_symbol_entries:
+            return None
+
+        day_end = day_start + timedelta(days=1)
+        midday = day_start + timedelta(hours=12)
+        best_symbol: str | None = None
+        best_distance: float | None = None
+
+        for dt, symbol in self._hourly_symbol_entries:
+            if symbol is None:
+                continue
+            if day_start <= dt < day_end:
+                distance = abs((dt - midday).total_seconds())
+                if best_distance is None or distance < best_distance:
+                    best_symbol = symbol
+                    best_distance = distance
+
+        return best_symbol
+
+    def _update_cached_daily_conditions(self) -> None:
+        if not self._daily_data:
+            return
+
+        for entry in self._daily_data:
+            dt = entry.get("datetime")
+            if isinstance(dt, datetime):
+                entry["condition"] = self._infer_daily_condition(dt)
 
     @property
     def _hourly_parameters(self) -> list[str]:

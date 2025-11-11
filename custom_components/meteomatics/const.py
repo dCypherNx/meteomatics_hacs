@@ -25,7 +25,7 @@ API_BASE_URL = "https://api.meteomatics.com"
 DEFAULT_MODEL = "mix"
 
 HOURLY_HOURS = 24
-DAILY_DAYS = 10
+DAILY_DAYS = 9
 
 # Parameter sets for each plan type. The basic plan follows the
 # restrictions from the free tier documentation, while the paid/trial plan
@@ -68,7 +68,6 @@ DAILY_PARAMETERS_BASIC = [
     "uv:idx",
     "sunrise:sql",
     "sunset:sql",
-    "weather_symbol_24h:idx",
 ]
 
 DAILY_PARAMETERS_PAID_TRIAL = [
@@ -82,7 +81,6 @@ DAILY_PARAMETERS_PAID_TRIAL = [
     "uv:idx",
     "sunrise:sql",
     "sunset:sql",
-    "weather_symbol_24h:idx",
 ]
 
 BASIC_DAILY_FETCH_HOURS = (3, 9, 15, 21)
