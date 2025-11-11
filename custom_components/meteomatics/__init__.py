@@ -11,13 +11,12 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import (
-    CONF_BASIC_OPTIONAL_PARAMETERS,
     CONF_LATITUDE,
     CONF_LONGITUDE,
     CONF_PLAN_TYPE,
-    CONF_UPDATE_INTERVAL,
-    DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_UPDATE_INTERVAL_MINUTES,
     DOMAIN,
+    PLAN_TYPE_BASIC,
     PLAN_TYPE_PAID_TRIAL,
 )
 from .coordinator import MeteomaticsDataUpdateCoordinator
@@ -27,12 +26,10 @@ LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.WEATHER]
 
 
-def _get_update_interval(entry: ConfigEntry) -> timedelta:
-    minutes = entry.options.get(
-        CONF_UPDATE_INTERVAL,
-        entry.data.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-    )
-    return timedelta(minutes=minutes)
+def _plan_update_interval(plan_type: str) -> timedelta:
+    if plan_type == PLAN_TYPE_BASIC:
+        return timedelta(minutes=DEFAULT_UPDATE_INTERVAL_MINUTES)
+    return timedelta(minutes=DEFAULT_UPDATE_INTERVAL_MINUTES)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -47,9 +44,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         password=entry.data[CONF_PASSWORD],
         latitude=entry.data[CONF_LATITUDE],
         longitude=entry.data[CONF_LONGITUDE],
-        update_interval=_get_update_interval(entry),
+        update_interval=_plan_update_interval(
+            entry.data.get(CONF_PLAN_TYPE, PLAN_TYPE_PAID_TRIAL)
+        ),
         plan_type=entry.data.get(CONF_PLAN_TYPE, PLAN_TYPE_PAID_TRIAL),
-        basic_optional_parameters=entry.data.get(CONF_BASIC_OPTIONAL_PARAMETERS, []),
         config_entry=entry,
     )
 
@@ -89,12 +87,13 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if coordinator is None:
         LOGGER.debug(
             "Options updated for Meteomatics entry %s before setup completed; "
-            "the new update interval will be applied on the next setup",
+            "the new configuration will be applied on the next setup",
             entry.entry_id,
         )
         return
 
-    new_interval = _get_update_interval(entry)
+    plan_type = entry.data.get(CONF_PLAN_TYPE, PLAN_TYPE_PAID_TRIAL)
+    new_interval = _plan_update_interval(plan_type)
 
     interval_changed = False
     if coordinator.update_interval != new_interval:
@@ -107,18 +106,12 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     credentials_changed = coordinator.update_credentials(
         entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD]
     )
-    plan_changed = coordinator.update_plan_type(
-        entry.data.get(CONF_PLAN_TYPE, PLAN_TYPE_PAID_TRIAL)
-    )
-    parameters_changed = coordinator.update_basic_optional_parameters(
-        entry.data.get(CONF_BASIC_OPTIONAL_PARAMETERS, [])
-    )
+    plan_changed = coordinator.update_plan_type(plan_type)
 
     if (
         not interval_changed
         and not credentials_changed
         and not plan_changed
-        and not parameters_changed
     ):
         LOGGER.debug(
             "Meteomatics entry %s already using provided configuration",
