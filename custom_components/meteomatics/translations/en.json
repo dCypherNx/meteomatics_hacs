@@ -22,8 +22,10 @@
     "step": {
       "init": {
         "title": "Meteomatics options",
-        "description": "Adjust how often data is refreshed.",
+        "description": "Update your Meteomatics credentials or adjust how often data is refreshed.",
         "data": {
+          "username": "Username",
+          "password": "Password",
           "update_interval": "Update interval (minutes)"
         }
       }

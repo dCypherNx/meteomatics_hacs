@@ -91,17 +91,23 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
     new_interval = _get_update_interval(entry)
 
-    if coordinator.update_interval == new_interval:
+    interval_changed = False
+    if coordinator.update_interval != new_interval:
+        try:
+            await coordinator.async_set_update_interval(new_interval)
+        except AttributeError:  # Home Assistant < 2024.8
+            coordinator.update_interval = new_interval
+        interval_changed = True
+
+    credentials_changed = coordinator.update_credentials(
+        entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD]
+    )
+
+    if not interval_changed and not credentials_changed:
         LOGGER.debug(
-            "Meteomatics entry %s already using update interval %s", 
+            "Meteomatics entry %s already using provided configuration",
             entry.entry_id,
-            new_interval,
         )
         return
-
-    try:
-        await coordinator.async_set_update_interval(new_interval)
-    except AttributeError:  # Home Assistant < 2024.8
-        coordinator.update_interval = new_interval
 
     await coordinator.async_request_refresh()

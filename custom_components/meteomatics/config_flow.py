@@ -106,11 +106,55 @@ class MeteomaticsOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
         super().__init__(config_entry)
 
     async def async_step_init(self, user_input: Mapping[str, Any] | None = None) -> FlowResult:
+        errors: dict[str, str] = {}
+
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            new_username = user_input[CONF_USERNAME]
+            new_password = user_input[CONF_PASSWORD]
+            update_interval = user_input[CONF_UPDATE_INTERVAL]
+
+            validation_data = {
+                CONF_USERNAME: new_username,
+                CONF_PASSWORD: new_password,
+                CONF_LATITUDE: self.config_entry.data[CONF_LATITUDE],
+                CONF_LONGITUDE: self.config_entry.data[CONF_LONGITUDE],
+            }
+
+            try:
+                await validate_input(self.hass, validation_data)
+            except aiohttp.ClientResponseError as err:
+                if err.status == 401:
+                    errors["base"] = "invalid_auth"
+                else:
+                    errors["base"] = "cannot_connect"
+            except (aiohttp.ClientError, asyncio.TimeoutError):
+                errors["base"] = "cannot_connect"
+            else:
+                new_data = {
+                    **self.config_entry.data,
+                    CONF_USERNAME: new_username,
+                    CONF_PASSWORD: new_password,
+                }
+
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    data=new_data,
+                )
+
+                options_data = {CONF_UPDATE_INTERVAL: update_interval}
+
+                return self.async_create_entry(title="", data=options_data)
 
         schema = vol.Schema(
             {
+                vol.Required(
+                    CONF_USERNAME,
+                    default=self.config_entry.data[CONF_USERNAME],
+                ): str,
+                vol.Required(
+                    CONF_PASSWORD,
+                    default=self.config_entry.data[CONF_PASSWORD],
+                ): str,
                 vol.Required(
                     CONF_UPDATE_INTERVAL,
                     default=self.config_entry.options.get(
@@ -125,4 +169,4 @@ class MeteomaticsOptionsFlow(config_entries.OptionsFlowWithConfigEntry):
             }
         )
 
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.8] - 2025-11-06
+### Added
+- Allow reconfiguring Meteomatics credentials directly from the options flow so usernames and passwords can be updated without removing the integration.
+
+### Fixed
+- Pause updates for one hour after receiving HTTP 429 responses from the Meteomatics API to honor rate limits.
+
+## [0.1.7] - 2025-11-05
+### Changed
+- Internal build not released publicly.
+
 ## [0.1.6] - 2025-11-05
 ### Fixed
 - Ignore option updates that arrive before the Meteomatics entry finishes setting up so Home Assistant no longer raises `ConfigEntryNotReady` when the update interval is adjusted.
