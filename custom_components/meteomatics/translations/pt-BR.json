@@ -3,30 +3,27 @@
     "step": {
       "user": {
         "title": "Meteomatics",
-        "description": "Informe suas credenciais Meteomatics, tipo de plano e a localização.",
+        "description": "Informe suas credenciais Meteomatics. A localização configurada no Home Assistant será usada automaticamente.",
         "data": {
           "username": "Usuário",
-          "password": "Senha",
-          "plan_type": "Tipo de plano",
-          "latitude": "Latitude",
-          "longitude": "Longitude"
+          "password": "Senha"
         }
       }
     },
     "error": {
       "invalid_auth": "Usuário ou senha inválidos.",
-      "cannot_connect": "Falha ao conectar com a API da Meteomatics."
+      "cannot_connect": "Falha ao conectar com a API da Meteomatics.",
+      "no_location": "O Home Assistant precisa de uma localização configurada para obter dados meteorológicos."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Opções do Meteomatics",
-        "description": "Atualize suas credenciais ou o tipo de plano.",
+        "description": "Atualize suas credenciais do Meteomatics.",
         "data": {
           "username": "Usuário",
-          "password": "Senha",
-          "plan_type": "Tipo de plano"
+          "password": "Senha"
         }
       }
     }

@@ -3,30 +3,27 @@
     "step": {
       "user": {
         "title": "Meteomatics",
-        "description": "Enter your Meteomatics credentials, plan type, and location.",
+        "description": "Enter your Meteomatics credentials. Your Home Assistant location will be used automatically.",
         "data": {
           "username": "Username",
-          "password": "Password",
-          "plan_type": "Plan type",
-          "latitude": "Latitude",
-          "longitude": "Longitude"
+          "password": "Password"
         }
       }
     },
     "error": {
       "invalid_auth": "Invalid username or password.",
-      "cannot_connect": "Failed to connect to Meteomatics API."
+      "cannot_connect": "Failed to connect to Meteomatics API.",
+      "no_location": "Home Assistant needs a configured location to fetch weather data."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Meteomatics options",
-        "description": "Update your Meteomatics credentials or plan type.",
+        "description": "Update your Meteomatics credentials.",
         "data": {
           "username": "Username",
-          "password": "Password",
-          "plan_type": "Plan type"
+          "password": "Password"
         }
       }
     }

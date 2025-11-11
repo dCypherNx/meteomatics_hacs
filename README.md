@@ -4,13 +4,14 @@ This repository provides a Home Assistant custom component that connects to the 
 
 ## Features
 
-- Config flow that requests Meteomatics username, password, latitude, longitude, and update interval.
-- Data is fetched through the official Meteomatics REST API using only endpoints available on the free plan.
+- Simple configuration that only requires your Meteomatics username and password. The integration automatically uses the Home Assistant latitude and longitude.
+- Data is fetched through the official Meteomatics REST API using only endpoints available on the basic/free plan.
+- The hourly request includes the most verbose data set allowed by the plan, while the complementary daily request focuses on extremes and solar information, inferring other attributes when possible.
 - Provides a `weather` entity with:
   - Current conditions (temperature, humidity, pressure, wind speed/bearing and symbol-based condition).
   - Hourly forecast for the next 24 hours including precipitation, pressure, humidity and wind details.
-  - Daily forecast for the next 7 days including high/low temperatures, precipitation and wind information.
-- Supports Home Assistant options flow to adjust the refresh interval (15–180 minutes).
+  - Daily forecast for the next 7 days including high/low temperatures, precipitation, inferred precipitation totals and wind information.
+- Supports the Home Assistant options flow to update stored credentials at any time.
 
 ## Installation
 
@@ -29,9 +30,9 @@ This repository provides a Home Assistant custom component that connects to the 
 ### Configuration
 
 1. Go to **Settings → Devices & Services → Add Integration** and search for **Meteomatics**.
-2. Enter your Meteomatics credentials, desired latitude/longitude and the preferred update interval.
+2. Enter your Meteomatics username and password. The integration automatically uses the location configured in Home Assistant.
 
-> **Note:** The Meteomatics basic/free plan only allows access to a limited set of parameters and forecasting horizon. The integration uses endpoints compatible with this plan, but you must have an active Meteomatics account.
+> **Note:** The Meteomatics basic/free plan restricts each request to 10 parameters. The integration distributes 15 available parameters across hourly and daily queries to stay within this limit while delivering rich forecasts.
 
 ## Credits
 

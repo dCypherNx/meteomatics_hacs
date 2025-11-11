@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0] - 2025-11-19
+### Changed
+- Release version 0.3.0 with the simplified configuration flow and refactored coordinator.
+
+## [0.2.2] - 2025-11-19
+### Changed
+- Release version 0.2.2.
+
 ## [0.2.1] - 2025-11-12
 ### Changed
 - Enforce the basic-plan cadence with fixed 20-minute hourly refreshes and scheduled daily retrievals.
