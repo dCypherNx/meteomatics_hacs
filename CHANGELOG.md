@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.1] - 2025-11-20
+### Fixed
+- Import `asyncio` in the coordinator so timeout handling no longer raises a `NameError` when Meteomatics requests fail.
+
 ## [0.3.0] - 2025-11-19
 ### Changed
 - Release version 0.3.0 with the simplified configuration flow and refactored coordinator.
