@@ -8,8 +8,8 @@ This repository provides a Home Assistant custom component that connects to the 
 - Data is fetched through the official Meteomatics REST API using only endpoints available on the basic/free plan.
 - The hourly request includes the most verbose data set allowed by the plan, while the complementary daily request focuses on extremes and solar information, inferring other attributes when possible.
 - Provides a `weather` entity with:
-  - Current conditions (temperature, humidity, pressure, wind speed/bearing and symbol-based condition).
-  - Hourly forecast for the next 24 hours including precipitation, pressure, humidity and wind details.
+  - Current conditions (temperature, pressure, wind speed/bearing and symbol-based condition).
+  - Hourly forecast for the next 24 hours including precipitation, pressure and wind details.
   - Daily forecast for the next 7 days including high/low temperatures, precipitation, inferred precipitation totals and wind information.
 - Supports the Home Assistant options flow to update stored credentials at any time.
 

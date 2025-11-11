@@ -161,7 +161,6 @@ class MeteomaticsWeather(
         if not daily:
             forecast[ATTR_FORECAST_PRESSURE] = data.get("pressure")
             forecast[ATTR_FORECAST_WIND_BEARING] = data.get("wind_bearing")
-            forecast[ATTR_FORECAST_HUMIDITY] = data.get("humidity")
         else:
             forecast[ATTR_FORECAST_TEMP_LOW] = data.get("templow")
         return forecast
