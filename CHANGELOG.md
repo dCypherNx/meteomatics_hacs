@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.1] - 2025-11-12
+### Changed
+- Enforce the basic-plan cadence with fixed 20-minute hourly refreshes and scheduled daily retrievals.
+- Update the hourly and daily parameter sets to match the free-tier requirements, limit the daily horizon to nine days, and infer the daily symbol from hourly data.
+- Remove optional parameter selection and variable interval configuration from the setup and options flows.
+
 ## [0.1.9] - 2025-11-07
 ### Added
 - Allow Meteomatics basic-plan users to pick additional optional parameters during setup while always requesting the required
