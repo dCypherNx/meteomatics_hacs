@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.0] - 2025-11-24
+### Changed
+- Release version 0.4.0 with distinct day and night weather symbol mappings for Meteomatics icons.
+
 ## [0.3.4] - 2025-11-23
 ### Changed
 - Release version 0.3.4.
