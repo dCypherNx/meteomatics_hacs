@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.9] - 2025-11-07
+### Added
+- Allow Meteomatics basic-plan users to pick additional optional parameters during setup while always requesting the required
+  baseline datasets.
+
+### Changed
+- Persist the optional parameter selection and make coordinator requests honor the chosen datasets for each account tier.
+
 ## [0.1.8] - 2025-11-06
 ### Added
 - Allow reconfiguring Meteomatics credentials directly from the options flow so usernames and passwords can be updated without removing the integration.
