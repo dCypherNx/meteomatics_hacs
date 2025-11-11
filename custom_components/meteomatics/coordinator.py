@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Iterable
 
 import asyncio
@@ -301,11 +301,16 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _build_daily_forecast(
         self, parsed: dict[str, dict[str, list[dict[str, Any]]]]
     ) -> list[dict[str, Any]]:
+        derived_temperatures = self._derive_daily_temperatures()
         daily: list[dict[str, Any]] = []
         for entry in parsed.get("t_max_2m_24h:C", {}).get("dates", []):
             dt = self._parse_time(entry.get("date"))
             if dt is None:
                 continue
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=dt_util.UTC)
+            local_day = dt.astimezone(self._time_zone).date()
+            temperatures = derived_temperatures.get(local_day)
             condition = self._daily_condition(parsed, dt)
             midday = dt + timedelta(hours=12)
             precipitation = self._value_at(parsed, "precip_24h:mm", dt)
@@ -328,8 +333,16 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             daily.append(
                 {
                     "datetime": dt,
-                    "temperature": entry.get("value"),
-                    "templow": self._value_at(parsed, "t_min_2m_24h:C", dt),
+                    "temperature": (
+                        temperatures[0]
+                        if temperatures and temperatures[0] is not None
+                        else entry.get("value")
+                    ),
+                    "templow": (
+                        temperatures[1]
+                        if temperatures and temperatures[1] is not None
+                        else self._value_at(parsed, "t_min_2m_24h:C", dt)
+                    ),
                     "condition": condition,
                     "precipitation": precipitation,
                     "wind_speed": wind_speed,
@@ -400,10 +413,48 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not self._daily_data:
             return
 
+        derived_temperatures = self._derive_daily_temperatures()
         for entry in self._daily_data:
             dt = entry.get("datetime")
             if isinstance(dt, datetime):
+                localized = dt
+                if localized.tzinfo is None:
+                    localized = localized.replace(tzinfo=dt_util.UTC)
+                local_day = localized.astimezone(self._time_zone).date()
+                temperatures = derived_temperatures.get(local_day)
                 entry["condition"] = self._infer_daily_condition(dt)
+                if temperatures:
+                    high, low = temperatures
+                    if high is not None:
+                        entry["temperature"] = high
+                    if low is not None:
+                        entry["templow"] = low
+
+    def _derive_daily_temperatures(self) -> dict[date, tuple[float | None, float | None]]:
+        derived: dict[date, tuple[float | None, float | None]] = {}
+        hourly_entries = self._latest_hourly_parsed.get("t_2m:C", {}).get("dates", [])
+        grouped: dict[date, list[float]] = {}
+
+        for item in hourly_entries:
+            dt = self._parse_time(item.get("date"))
+            if dt is None:
+                continue
+            value = item.get("value")
+            try:
+                temperature = float(value)
+            except (TypeError, ValueError):
+                continue
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=dt_util.UTC)
+            local_day = dt.astimezone(self._time_zone).date()
+            grouped.setdefault(local_day, []).append(temperature)
+
+        for local_day, temperatures in grouped.items():
+            if not temperatures:
+                continue
+            derived[local_day] = (max(temperatures), min(temperatures))
+
+        return derived
 
     def _hourly_value_near(
         self, parameter: str, target: datetime

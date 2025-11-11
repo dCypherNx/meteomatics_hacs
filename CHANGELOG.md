@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.3] - 2025-11-22
+### Changed
+- Release version 0.3.3 to derive daily highs and lows from hourly forecasts and keep cached data in sync.
+
 ## [0.3.2] - 2025-11-21
 ### Changed
 - Release version 0.3.2 with the restricted Meteomatics parameter set and updated forecast handling.
