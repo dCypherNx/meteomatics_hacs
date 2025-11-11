@@ -22,8 +22,10 @@
     "step": {
       "init": {
         "title": "Opções do Meteomatics",
-        "description": "Ajuste a frequência de atualização dos dados.",
+        "description": "Atualize suas credenciais Meteomatics ou ajuste a frequência de atualização dos dados.",
         "data": {
+          "username": "Usuário",
+          "password": "Senha",
           "update_interval": "Intervalo de atualização (minutos)"
         }
       }

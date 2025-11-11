@@ -50,6 +50,7 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if time_zone_name
             else dt_util.UTC
         )
+        self._rate_limit_reset: datetime | None = None
         super().__init__(
             hass,
             LOGGER,
@@ -58,12 +59,32 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             config_entry=config_entry,
         )
 
+    def update_credentials(self, username: str, password: str) -> bool:
+        """Update the credentials used for Meteomatics requests."""
+
+        if username == self._username and password == self._password:
+            return False
+
+        self._username = username
+        self._password = password
+        self._rate_limit_reset = None
+        return True
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Meteomatics."""
+        if self._rate_limit_reset and dt_util.utcnow() < self._rate_limit_reset:
+            raise UpdateFailed(
+                "Meteomatics rate limit reached; waiting to retry until "
+                f"{self._rate_limit_reset.isoformat()}"
+            )
+
         session = async_get_clientsession(self.hass)
         try:
             current, hourly = await self._fetch_hourly(session)
             daily = await self._fetch_daily(session)
+            self._rate_limit_reset = None
+        except UpdateFailed:
+            raise
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             raise UpdateFailed(f"Error communicating with Meteomatics: {err}") from err
 
@@ -127,8 +148,20 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             params={"model": DEFAULT_MODEL},
             timeout=30,
         ) as response:
+            if response.status == 429:
+                self._handle_rate_limit()
             response.raise_for_status()
             return await response.json()
+
+    def _handle_rate_limit(self) -> None:
+        self._rate_limit_reset = dt_util.utcnow() + timedelta(hours=1)
+        LOGGER.warning(
+            "Meteomatics API rate limit reached. Waiting until %s before retrying.",
+            self._rate_limit_reset.isoformat(),
+        )
+        raise UpdateFailed(
+            "Meteomatics API rate limit reached. Waiting one hour before retrying."
+        )
 
     def _parse_response(self, data: dict[str, Any]) -> dict[str, dict[str, list[dict[str, Any]]]]:
         parsed: dict[str, dict[str, list[dict[str, Any]]]] = {}
