@@ -192,9 +192,17 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         timerange: str,
         parameters: Iterable[str],
     ) -> dict[str, Any]:
-        params = ",".join(parameters)
+        param_list = list(parameters)
+        params = ",".join(param_list)
         url = (
             f"{API_BASE_URL}/{timerange}/{params}/{self._latitude},{self._longitude}/json"
+        )
+        LOGGER.debug(
+            "Requesting Meteomatics data: timerange=%s parameters=%s model=%s url=%s",
+            timerange,
+            param_list,
+            DEFAULT_MODEL,
+            url,
         )
         async with session.get(
             url,
@@ -205,7 +213,14 @@ class MeteomaticsDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if response.status == 429:
                 self._handle_rate_limit()
             response.raise_for_status()
-            return await response.json()
+            data = await response.json()
+            LOGGER.debug(
+                "Received Meteomatics response: status=%s url=%s data=%s",
+                response.status,
+                response.url,
+                data,
+            )
+            return data
 
     def _handle_rate_limit(self) -> None:
         self._rate_limit_reset = dt_util.utcnow() + timedelta(hours=1)
